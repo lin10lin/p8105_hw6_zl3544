@@ -1,0 +1,99 @@
+---
+title: "p8105_hw6_zl3544"
+output: github_document
+date: "2024-12-02"
+---
+```{r}
+library(tidyverse)
+library(purrr)
+library(broom)
+library(modelr)
+library(ggplot2)
+library(janitor)
+library(knitr)
+library(forcats)
+```
+# Problem 2
+```{r}
+# Load and clean the data
+homicides <- read_csv('./homicide-data.csv', na = c("Unknown", "NA", "", ".")) %>%
+  janitor::clean_names() %>%
+  mutate(
+    city_state = paste(city, state, sep = ", "),
+    resolved = if_else(disposition %in% c('Closed without arrest', 'Open/No arrest'), 0, 1),
+    victim_age = as.numeric(victim_age)
+  ) %>%
+  filter(
+    !city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL"),
+    victim_race %in% c("White", "Black")
+  ) %>%
+  drop_na(victim_age)
+
+# Logistic regression for Baltimore, MD
+baltimore_data <- homicides %>%
+  filter(city_state == "Baltimore, MD")
+
+baltimore_model <- glm(
+  resolved ~ victim_age + victim_sex + victim_race,
+  data = baltimore_data,
+  family = binomial
+)
+
+baltimore_results <- broom::tidy(baltimore_model, conf.int = TRUE, exponentiate = TRUE) %>%
+  filter(term == "victim_sexMale") %>%
+  select(estimate, conf.low, conf.high) %>%
+  rename(
+    OR = estimate,
+    CI_lower = conf.low,
+    CI_upper = conf.high
+  )
+
+# Print results for Baltimore
+baltimore_results %>%
+  kable(
+    digits = 2,
+    col.names = c("OR Estimate", "CI Lower", "CI Upper"),
+    caption = "Baltimore Logistic Regression Results"
+  )
+
+# Logistic regression for all cities
+city_results <- homicides %>%
+  group_by(city_state) %>%
+  nest() %>%
+  mutate(
+    model = map(data, ~ glm(resolved ~ victim_age + victim_sex + victim_race, data = ., family = binomial)),
+    tidy_model = map(model, ~ broom::tidy(.x, conf.int = TRUE, exponentiate = TRUE))
+  ) %>%
+  unnest(tidy_model) %>%
+  filter(term == "victim_sexMale") %>%
+  mutate(
+    OR = exp(estimate),
+    CI_lower = exp(estimate - 1.96 * std.error),
+    CI_upper = exp(estimate + 1.96 * std.error)
+  ) %>%
+  select(city_state, OR, CI_lower, CI_upper)
+
+# Print all city results
+city_results %>%
+  kable(
+    digits = 3,
+    col.names = c("City, State", "OR Estimate", "CI Lower", "CI Upper"),
+    caption = "City-Wide Logistic Regression Results"
+  )
+
+# Plot the results
+city_results <- city_results %>%
+  mutate(city_state = fct_reorder(city_state, OR))
+
+ggplot(city_results, aes(x = OR, y = city_state)) +
+  geom_point() +
+  geom_errorbarh(
+    aes(xmin = CI_lower, xmax = CI_upper), height = 0.2
+  ) +
+  labs(
+    title = "Adjusted Odds Ratios for Solving Homicides (Male vs Female)",
+    x = "Odds Ratio (Male vs Female Victims)",
+    y = "City"
+  ) +
+  theme_minimal()
+```
