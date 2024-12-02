@@ -100,6 +100,8 @@ ggplot(city_results, aes(x = OR, y = city_state)) +
 ```
 
 # problem 3
+
+## Proposed regression model
 ```{r}
 # Load and inspect the data
 bwt_df <- read_csv("./birthweight.csv")
@@ -141,6 +143,10 @@ ggplot(bwt_df, aes(x = fitted, y = residuals)) +
     y = "Residuals"
   ) +
   theme_minimal()
+```
+
+## different models
+```{r}
 # alternative model 1
 model_maternal <- lm(
   bwt ~ momage + ppbmi + ppwt + smoken + wtgain,
@@ -175,7 +181,10 @@ cv_df <- crossv_mc(bwt_df, 100) |>
     train = map(train, as_tibble),
     test = map(test, as_tibble)
   )
+```
 
+## cross-validation
+```{r}
 # Fit models for cross-validation
 cv_res_df <- cv_df |>
   mutate(
