@@ -12,6 +12,7 @@ library(ggplot2)
 library(janitor)
 library(knitr)
 library(forcats)
+library(crossval)
 ```
 # Problem 2
 ```{r}
@@ -88,7 +89,7 @@ city_results <- city_results %>%
 ggplot(city_results, aes(x = OR, y = city_state)) +
   geom_point() +
   geom_errorbarh(
-    aes(xmin = CI_lower, xmax = CI_upper), height = 0.2
+    aes(xmin = CI_lower, xmax = CI_upper), height = 0.33
   ) +
   labs(
     title = "Adjusted Odds Ratios for Solving Homicides (Male vs Female)",
@@ -97,3 +98,129 @@ ggplot(city_results, aes(x = OR, y = city_state)) +
   ) +
   theme_minimal()
 ```
+
+# problem 3
+```{r}
+# Load and inspect the data
+bwt_df <- read_csv("./birthweight.csv")
+
+# Clean the data
+bwt_df <- bwt_df |>
+  mutate(
+    babysex = factor(babysex, levels = c(1, 2), labels = c("Male", "Female")),
+    frace = factor(frace),
+    mrace = factor(mrace),
+    malform = factor(malform),
+    smoken = as.numeric(smoken)
+  ) |>
+  drop_na()  
+summary(bwt_df)
+
+# Proposed model based on hypothesized relationships
+bwt_model1 <- lm(
+  bwt ~ gaweeks + ppbmi + smoken + parity + malform + pnumlbw,
+  data = bwt_df
+)
+
+# Summarize the proposed model
+bwt_model1 |>
+  broom::tidy()
+
+# Add predictions and residuals for diagnostic plot
+bwt_df <- bwt_df |>
+  add_predictions(bwt_model1, var = "fitted") |>
+  add_residuals(bwt_model1, var = "residuals")
+
+# Residuals vs Fitted Values Plot
+ggplot(bwt_df, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    title = "Residuals vs Fitted Values (Proposed Model)",
+    x = "Fitted Values",
+    y = "Residuals"
+  ) +
+  theme_minimal()
+# alternative model 1
+model_maternal <- lm(
+  bwt ~ momage + ppbmi + ppwt + smoken + wtgain,
+  data = bwt_df
+)
+model_maternal |>
+  broom::tidy()
+# alternative model 2
+model_child <- lm(
+  bwt ~ gaweeks + bhead + blength + babysex,
+  data = bwt_df
+)
+model_child |>
+  broom::tidy()
+# alternative model 3
+model_interaction <- lm(
+  bwt ~ gaweeks * ppbmi + smoken * blength + wtgain * bhead,
+  data = bwt_df
+)
+model_interaction |>
+  broom::tidy()
+
+# Define a function to calculate RMSE
+rmse <- function(model, data) {
+  sqrt(mean((data$bwt - predict(model, newdata = data))^2))
+}
+
+# Monte Carlo cross-validation
+set.seed(12)
+cv_df <- crossv_mc(bwt_df, 100) |>
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+
+# Fit models for cross-validation
+cv_res_df <- cv_df |>
+  mutate(
+    proposed_mod = map(train, ~ lm(bwt ~ gaweeks + ppbmi + smoken + parity + malform + pnumlbw, data = .)),
+    maternal_mod = map(train, ~ lm(bwt ~ momage + ppbmi + ppwt + smoken + wtgain, data = .)),
+    child_mod = map(train, ~ lm(bwt ~ gaweeks + bhead + blength + babysex, data = .)),
+    interaction_mod = map(train, ~ lm(bwt ~ gaweeks * ppbmi + smoken * blength + wtgain * bhead, data = .))
+  ) |>
+  mutate(
+    rmse_proposed = map2_dbl(proposed_mod, test, rmse),
+    rmse_maternal = map2_dbl(maternal_mod, test, rmse),
+    rmse_child = map2_dbl(child_mod, test, rmse),
+    rmse_interaction = map2_dbl(interaction_mod, test, rmse)
+  )
+
+# Summarize cross-validation results
+cv_summary <- cv_res_df |>
+  select(starts_with("rmse")) |>
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  )
+
+# Violin plot for RMSE distribution
+ggplot(cv_summary, aes(x = model, y = rmse)) +
+  geom_violin() +
+  labs(
+    title = "Model Comparison via RMSE",
+    x = "Model",
+    y = "RMSE"
+  ) +
+  theme_minimal()
+
+# Boxplot for RMSE comparison
+ggplot(cv_summary, aes(x = model, y = rmse, fill = model)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(
+    title = "Model Comparison via RMSE",
+    x = "Model",
+    y = "Root Mean Square Error (RMSE)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+ One using head circumference, length, sex, and all interactions (including the three-way interaction) between these is the best model considering the RMSE.
