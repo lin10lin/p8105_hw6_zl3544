@@ -99,6 +99,34 @@ ggplot(city_results, aes(x = OR, y = city_state)) +
   theme_minimal()
 ```
 
+## comment on the plot:
+
+* Odds Ratios Above 1:
+
+An odds ratio greater than 1 indicates that homicides involving male victims are more likely to be solved compared to female victims.
+
+Several cities, such as Washington, D.C., Tulsa, OK, and Tampa, FL, exhibit ORs well above 1, suggesting a significantly higher likelihood of solving male homicides.
+
+* Wide Confidence Intervals:
+
+Many cities have wide confidence intervals, such as Fort Worth, TX and Albuquerque, NM.
+Wide intervals indicate higher variability in the data or smaller sample sizes, reducing the reliability of these estimates.
+
+
+* Cities with CIs Crossing 1:
+
+For some cities, such as Charlotte, NC, the confidence intervals cross 1.
+
+This suggests that the difference in solving rates between male and female victims is not statistically significant in these cities.
+
+* Extreme OR Values:
+
+Some cities, like Fresno, CA, have extreme OR values with very large confidence intervals, indicating unstable or unreliable estimates potentially due to small sample sizes or data inconsistencies.
+
+* conclusion:
+
+On average, the plot suggests that male victims' homicides are more likely to be solved compared to female victims in most cities. However, the wide confidence intervals and variability across cities highlight the uncertainty and heterogeneity in these results.
+
 # problem 3
 
 ## Proposed regression model
